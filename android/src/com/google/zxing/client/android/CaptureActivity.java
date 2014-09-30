@@ -72,6 +72,9 @@ import java.util.Date;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+
+import org.apache.http.util.ByteArrayBuffer;
 
 /**
  * This activity opens the camera and does the actual scanning on a background thread. It draws a
@@ -117,6 +120,9 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
   private TextView statusView;
   private View resultView;
   private Result lastResult;
+  private int structuredParity;
+  private int structuredCount;
+  private ArrayList<Result> structuredResults;
   private boolean hasSurface;
   private boolean copyToClipboard;
   private IntentSource source;
@@ -165,6 +171,9 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
     historyManager.trimHistory();
     inactivityTimer = new InactivityTimer(this);
     beepManager = new BeepManager(this);
+
+    structuredResults = new ArrayList<Result>();
+    structuredParity = -1;
 
     PreferenceManager.setDefaultValues(this, R.xml.preferences, false);
 
@@ -450,6 +459,67 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
    */
   public void handleDecode(Result rawResult, Bitmap barcode) {
     inactivityTimer.onActivity();
+
+    // If this is part of a structured symbol set, insert it in an array
+    Map<ResultMetadataType,?> metadata = rawResult.getResultMetadata();
+    if (metadata != null && metadata.containsKey(ResultMetadataType.STRUCTURED_APPEND_PARITY)) {
+
+      int index = (Integer) metadata.get(ResultMetadataType.STRUCTURED_APPEND_INDEX) - 1;
+      int total = (Integer) metadata.get(ResultMetadataType.STRUCTURED_APPEND_TOTAL);
+      int parity = (Integer) metadata.get(ResultMetadataType.STRUCTURED_APPEND_PARITY);
+      if (structuredResults.size() != total || parity != structuredParity) {
+        structuredResults.clear();
+        for (int i = 0; i < total; ++ i)
+          structuredResults.add(null);
+        structuredParity = parity;
+        structuredCount = 0;
+      }
+      if (structuredResults.get(index) == null)
+      {
+        structuredCount ++;
+        Toast.makeText(this, "#" + String.valueOf(index + 1) + " (" + String.valueOf(structuredCount) + " / " + String.valueOf(total) + ")", Toast.LENGTH_SHORT).show();
+    	beepManager.playBeepSoundAndVibrate();
+      }
+      structuredResults.set(index, rawResult);
+      if (structuredCount < total) {
+         restartPreviewAfterDelay(0);
+         return;
+      }
+
+      // This was the last symbol in the set.  Merge the structured symbols
+
+      StringBuilder text = new StringBuilder();
+      ByteArrayBuffer data = new ByteArrayBuffer(0);
+      ByteArrayBuffer rawBytes = new ByteArrayBuffer(0);
+
+      for (Result r : structuredResults) {
+        if (r.getBinaryData() != null) {
+          data.append(r.getBinaryData(), 0, r.getBinaryData().length);
+        }
+        if (r.getRawBytes() != null) {
+          rawBytes.append(r.getRawBytes(), 0, r.getRawBytes().length);
+        }
+        if (r.getText() != null) {
+          text.append(r.getText());
+        }
+      }
+
+      Result headResult = structuredResults.get(1);
+      rawResult = new Result(text.toString(),
+                             data.toByteArray(),
+                             rawBytes.toByteArray(),
+                             null,
+                             headResult.getBarcodeFormat(),
+                             headResult.getTimestamp());
+      for (Result r : structuredResults) {
+        rawResult.addResultPoints(r.getResultPoints());
+        rawResult.putAllMetadata(r.getResultMetadata());
+      }
+
+      structuredResults = null;
+      structuredParity = -1;
+    }
+
     lastResult = rawResult;
     ResultHandler resultHandler = ResultHandlerFactory.makeResultHandler(this, rawResult);
     historyManager.addHistoryItem(rawResult, resultHandler);
