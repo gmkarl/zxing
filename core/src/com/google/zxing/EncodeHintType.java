@@ -33,4 +33,24 @@ public enum EncodeHintType {
    */
   CHARACTER_SET,
 
+  /**
+   * Force to use 8-bit Mode for encoding characters (type Boolean)
+   */
+  FORCE_8BIT_MODE,
+
+  /**
+   * Specifies the symbol index in Structured Append Mode (type Integer)
+   */
+  STRUCTURED_APPEND_INDEX,
+
+  /**
+   * Specifies the total number of symbols in Structured Append Mode (type Integer)
+   */
+  STRUCTURED_APPEND_TOTAL,
+
+  /**
+   * Specifies the data parity byte in Structured Append Mode (type Integer)
+   */
+  STRUCTURED_APPEND_PARITY,
+
 }

@@ -78,7 +78,7 @@ public class QRCodeReader implements Reader {
       points = detectorResult.getPoints();
     }
 
-    Result result = new Result(decoderResult.getText(), decoderResult.getRawBytes(), points, BarcodeFormat.QR_CODE);
+    Result result = new Result(decoderResult.getText(), decoderResult.getBinaryData(), decoderResult.getRawBytes(), points, BarcodeFormat.QR_CODE);
     List<byte[]> byteSegments = decoderResult.getByteSegments();
     if (byteSegments != null) {
       result.putMetadata(ResultMetadataType.BYTE_SEGMENTS, byteSegments);
@@ -86,6 +86,11 @@ public class QRCodeReader implements Reader {
     String ecLevel = decoderResult.getECLevel();
     if (ecLevel != null) {
       result.putMetadata(ResultMetadataType.ERROR_CORRECTION_LEVEL, ecLevel);
+    }
+    if (decoderResult.isPartOfStructuredAppend()) {
+	result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_INDEX, decoderResult.getIndex());
+	result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_TOTAL, decoderResult.getTotal());
+	result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_PARITY, decoderResult.getParity());
     }
     return result;
   }

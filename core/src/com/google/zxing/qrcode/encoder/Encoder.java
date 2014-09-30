@@ -47,7 +47,7 @@ public final class Encoder {
       25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, -1, -1, -1, -1, -1,  // 0x50-0x5f
   };
 
-  static final String DEFAULT_BYTE_MODE_ENCODING = "ISO-8859-1";
+  public static final String DEFAULT_BYTE_MODE_ENCODING = "ISO-8859-1";
 
   private Encoder() {
   }
@@ -90,24 +90,36 @@ public final class Encoder {
     }
 
     // Step 1: Choose the mode (encoding).
-    Mode mode = chooseMode(content, encoding);
+    Boolean force8bit = hints == null ? null : (Boolean) hints.get(EncodeHintType.FORCE_8BIT_MODE);
+    Mode mode = (Boolean.TRUE.equals(force8bit)) ? Mode.BYTE : chooseMode(content, encoding);
 
     // Step 2: Append "bytes" into "dataBits" in appropriate encoding.
     BitArray dataBits = new BitArray();
     appendBytes(content, mode, dataBits, encoding);
+    
     // Step 3: Initialize QR code that can contain "dataBits".
-    int numInputBits = dataBits.getSize();
-    initQRCode(numInputBits, ecLevel, mode, qrCode);
+    Integer index = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_INDEX);
+    Integer total = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_TOTAL);
+    Integer parity = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_PARITY);
+    boolean sa = (index != null && total != null && parity != null && index >= 1 && index <= 16 && total >= 1 && total <= 16);
+    CharacterSetECI eci = null;
+    if (mode == Mode.BYTE && !DEFAULT_BYTE_MODE_ENCODING.equals(encoding)) {
+	eci = CharacterSetECI.getCharacterSetECIByName(encoding);
+    }
+    if (qrCode.getVersion() == 0) {
+	int numInputBits = dataBits.getSize();
+	initQRCode(sa, eci, numInputBits, ecLevel, mode, qrCode);
+    }
 
     // Step 4: Build another bit vector that contains header and data.
     BitArray headerAndDataBits = new BitArray();
 
+    if (sa) {
+	  appendSA(index, total, parity, headerAndDataBits);
+    }
     // Step 4.5: Append ECI message if applicable
-    if (mode == Mode.BYTE && !DEFAULT_BYTE_MODE_ENCODING.equals(encoding)) {
-      CharacterSetECI eci = CharacterSetECI.getCharacterSetECIByName(encoding);
-      if (eci != null) {
-        appendECI(eci, headerAndDataBits);
-      }
+    if (eci != null) {
+	appendECI(eci, headerAndDataBits);
     }
 
     appendModeInfo(mode, headerAndDataBits);
@@ -135,6 +147,72 @@ public final class Encoder {
     if (!qrCode.isValid()) {
       throw new WriterException("Invalid QR code: " + qrCode.toString());
     }
+  }
+
+  public static void encode(byte[] content, int offset, int len, ErrorCorrectionLevel ecLevel, QRCode qrCode)
+    throws WriterException {
+      encode(content, offset, len, ecLevel, null, qrCode);
+  }
+
+  public static void encode(byte[] content,
+	  int offset,
+	  int len,
+	  ErrorCorrectionLevel ecLevel,
+          Map<EncodeHintType,?> hints,
+	  QRCode qrCode) throws WriterException {
+
+      // Step 1: Force byte mode (encoding).
+      Mode mode = Mode.BYTE;
+
+      // Step 2: Append "bytes" into "dataBits".
+      BitArray dataBits = new BitArray();
+      appendBytes(content, offset, len, dataBits);
+      
+      // Step 3: Initialize QR code that can contain "dataBits".
+      Integer index = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_INDEX);
+      Integer total = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_TOTAL);
+      Integer parity = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_PARITY);
+      boolean sa = (index != null && total != null && parity != null && index >= 1 && index <= 16 && total >= 1 && total <= 16);
+      CharacterSetECI eci = CharacterSetECI.BinaryData;
+      if (qrCode.getVersion() == 0) {
+	  int numInputBits = dataBits.getSize();
+	  initQRCode(sa, eci, numInputBits, ecLevel, mode, qrCode);
+      }
+
+      // Step 4: Build another bit vector that contains header and data.
+      BitArray headerAndDataBits = new BitArray();
+
+      if (sa) {
+	  appendSA(index, total, parity, headerAndDataBits);
+      }
+      // Step 4.5: Append ECI message
+      appendECI(eci, headerAndDataBits);
+
+      appendModeInfo(mode, headerAndDataBits);
+
+      int numBytes = dataBits.getSizeInBytes();
+      appendLengthInfo(numBytes, qrCode.getVersion(), mode, headerAndDataBits);
+      headerAndDataBits.appendBitArray(dataBits);
+
+      // Step 5: Terminate the bits properly.
+      terminateBits(qrCode.getNumDataBytes(), headerAndDataBits);
+
+      // Step 6: Interleave data bits with error correction code.
+      BitArray finalBits = new BitArray();
+      interleaveWithECBytes(headerAndDataBits, qrCode.getNumTotalBytes(), qrCode.getNumDataBytes(),
+	      qrCode.getNumRSBlocks(), finalBits);
+
+      // Step 7: Choose the mask pattern and set to "qrCode".
+      ByteMatrix matrix = new ByteMatrix(qrCode.getMatrixWidth(), qrCode.getMatrixWidth());
+      qrCode.setMaskPattern(chooseMaskPattern(finalBits, ecLevel, qrCode.getVersion(), matrix));
+
+      // Step 8.  Build the matrix and set it to "qrCode".
+      MatrixUtil.buildMatrix(finalBits, ecLevel, qrCode.getVersion(), qrCode.getMaskPattern(), matrix);
+      qrCode.setMatrix(matrix);
+      // Step 9.  Make sure we have a valid QR Code.
+      if (!qrCode.isValid()) {
+	  throw new WriterException("Invalid QR code: " + qrCode.toString());
+      }
   }
 
   /**
@@ -222,10 +300,11 @@ public final class Encoder {
   }
 
   /**
-   * Initialize "qrCode" according to "numInputBits", "ecLevel", and "mode". On success,
+   * Initialize "qrCode" according to "sa", "eci", "numInputBits", "ecLevel", and "mode". On success,
    * modify "qrCode".
    */
-  private static void initQRCode(int numInputBits,
+  private static void initQRCode(boolean sa, CharacterSetECI eci,
+	                         int numInputBits,
                                  ErrorCorrectionLevel ecLevel,
                                  Mode mode,
                                  QRCode qrCode) throws WriterException {
@@ -245,9 +324,9 @@ public final class Encoder {
       // getNumDataBytes = 196 - 130 = 66
       int numDataBytes = numBytes - numEcBytes;
       // We want to choose the smallest version which can contain data of "numInputBytes" + some
-      // extra bits for the header (mode info and length info). The header can be three bytes
-      // (precisely 4 + 16 bits) at most.
-      if (numDataBytes >= getTotalInputBytes(numInputBits, version, mode)) {
+      // extra bits for the header (Structured Append, ECI, mode info and length info).
+      // The header can be nine bytes (precisely 4 + 16 + 4 + 24 + 4 + 16 bits) at most.
+      if (numDataBytes >= getTotalInputBytes(sa, eci, numInputBits, version, mode)) {
         // Yay, we found the proper rs block info!
         qrCode.setVersion(versionNum);
         qrCode.setNumTotalBytes(numBytes);
@@ -263,12 +342,27 @@ public final class Encoder {
     throw new WriterException("Cannot find proper rs block info (input data too big?)");
   }
   
-  private static int getTotalInputBytes(int numInputBits, Version version, Mode mode) {
+  private static int getTotalInputBytes(boolean sa, CharacterSetECI eci, int numInputBits, Version version, Mode mode) {
     int modeInfoBits = 4;
     int charCountBits = mode.getCharacterCountBits(version);
     int headerBits = modeInfoBits + charCountBits;
     int totalBits = numInputBits + headerBits;
-      
+    if (eci != null) {
+	// ECI Mode
+	totalBits += 4;
+	// ECI Designator
+	if (eci.getValue() < 128) {
+	    totalBits += 8;
+	} else if (eci.getValue() < 16384) {
+	    totalBits += 16;
+	} else {
+	    totalBits += 24;
+	}
+    }
+    if (sa) {
+	// Structured Append
+	totalBits += 20;
+    }
     return (totalBits + 7) / 8;
   }
 
@@ -278,7 +372,7 @@ public final class Encoder {
   static void terminateBits(int numDataBytes, BitArray bits) throws WriterException {
     int capacity = numDataBytes << 3;
     if (bits.getSize() > capacity) {
-      throw new WriterException("data bits cannot fit in the QR Code" + bits.getSize() + " > " +
+      throw new WriterException("data bits cannot fit in the QR Code " + bits.getSize() + " > " +
           capacity);
     }
     for (int i = 0; i < 4 && bits.getSize() < capacity; ++i) {
@@ -488,6 +582,13 @@ public final class Encoder {
     }
   }
 
+  static void appendBytes(byte[] content, int offset, int len,
+	  BitArray bits) throws WriterException {
+      for (int i = 0; i < len; i++) {
+	  bits.appendBits(content[offset + i], 8);
+      }
+  }
+  
   static void appendNumericBytes(CharSequence content, BitArray bits) {
     int length = content.length();
     int i = 0;
@@ -575,10 +676,25 @@ public final class Encoder {
     }
   }
 
+  private static void appendSA(int index, int total, int parity, BitArray bits) {
+    bits.appendBits(Mode.STRUCTURED_APPEND.getBits(), 4);
+    bits.appendBits(index - 1, 4);
+    bits.appendBits(total - 1, 4);
+    bits.appendBits(parity, 8);
+  }
+
   private static void appendECI(CharacterSetECI eci, BitArray bits) {
     bits.appendBits(Mode.ECI.getBits(), 4);
-    // This is correct for values up to 127, which is all we need now.
-    bits.appendBits(eci.getValue(), 8);
+    if (eci.getValue() < 128) {
+	bits.appendBits(eci.getValue(), 8);
+    } else if (eci.getValue() < 16384) {
+	bits.appendBit(true);
+	bits.appendBits(eci.getValue(), 15);
+    } else {
+	bits.appendBit(true);
+	bits.appendBit(true);
+	bits.appendBits(eci.getValue(), 22);
+    }
   }
 
 }

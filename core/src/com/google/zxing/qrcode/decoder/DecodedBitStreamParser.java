@@ -23,6 +23,8 @@ import com.google.zxing.common.CharacterSetECI;
 import com.google.zxing.common.DecoderResult;
 import com.google.zxing.common.StringUtils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,10 +61,12 @@ final class DecodedBitStreamParser {
                               Map<DecodeHintType,?> hints) throws FormatException {
     BitSource bits = new BitSource(bytes);
     StringBuilder result = new StringBuilder(50);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
     CharacterSetECI currentCharacterSetECI = null;
     boolean fc1InEffect = false;
     List<byte[]> byteSegments = new ArrayList<byte[]>(1);
     Mode mode;
+    int index = 0, total = 0, parity = 0;
     do {
       // While still another segment to read...
       if (bits.available() < 4) {
@@ -80,9 +84,9 @@ final class DecodedBitStreamParser {
           // We do little with FNC1 except alter the parsed result a bit according to the spec
           fc1InEffect = true;
         } else if (mode == Mode.STRUCTURED_APPEND) {
-          // not really supported; all we do is ignore it
-          // Read next 8 bits (symbol sequence #) and 8 bits (parity data), then continue
-          bits.readBits(16);
+          index = bits.readBits(4) + 1;
+          total = bits.readBits(4) + 1;
+          parity = bits.readBits(8);
         } else if (mode == Mode.ECI) {
           // Count doesn't apply to ECI
           int value = parseECIValue(bits);
@@ -108,7 +112,7 @@ final class DecodedBitStreamParser {
             } else if (mode == Mode.ALPHANUMERIC) {
               decodeAlphanumericSegment(bits, result, count, fc1InEffect);
             } else if (mode == Mode.BYTE) {
-              decodeByteSegment(bits, result, count, currentCharacterSetECI, byteSegments, hints);
+              decodeByteSegment(bits, result, baos, count, currentCharacterSetECI, byteSegments, hints);
             } else if (mode == Mode.KANJI) {
               decodeKanjiSegment(bits, result, count);
             } else {
@@ -119,10 +123,13 @@ final class DecodedBitStreamParser {
       }
     } while (mode != Mode.TERMINATOR);
 
-    return new DecoderResult(bytes,
-                             result.toString(),
+    DecoderResult res = new DecoderResult(bytes,
+                             (result.length() > 0) ? result.toString() : null,
+                             (baos.size() > 0) ? baos.toByteArray() : null,
                              byteSegments.isEmpty() ? null : byteSegments,
                              ecLevel == null ? null : ecLevel.toString());
+    res.addStructuredAppendInfo(index, total, parity);
+    return res;
   }
 
   /**
@@ -202,6 +209,7 @@ final class DecodedBitStreamParser {
 
   private static void decodeByteSegment(BitSource bits,
                                         StringBuilder result,
+                                        ByteArrayOutputStream baos,
                                         int count,
                                         CharacterSetECI currentCharacterSetECI,
                                         Collection<byte[]> byteSegments,
@@ -215,6 +223,11 @@ final class DecodedBitStreamParser {
     for (int i = 0; i < count; i++) {
       readBytes[i] = (byte) bits.readBits(8);
     }
+    if (currentCharacterSetECI == CharacterSetECI.BinaryData) {
+	try {
+	    baos.write(readBytes);
+	} catch (IOException e) {}
+    } else {
     String encoding;
     if (currentCharacterSetECI == null) {
       // The spec isn't clear on this mode; see
@@ -230,6 +243,7 @@ final class DecodedBitStreamParser {
       result.append(new String(readBytes, encoding));
     } catch (UnsupportedEncodingException uce) {
       throw FormatException.getFormatInstance();
+    }
     }
     byteSegments.add(readBytes);
   }

@@ -27,6 +27,7 @@ import java.util.Map;
 public final class Result {
 
   private final String text;
+  private final byte[] data;
   private final byte[] rawBytes;
   private ResultPoint[] resultPoints;
   private final BarcodeFormat format;
@@ -37,7 +38,7 @@ public final class Result {
                 byte[] rawBytes,
                 ResultPoint[] resultPoints,
                 BarcodeFormat format) {
-    this(text, rawBytes, resultPoints, format, System.currentTimeMillis());
+    this(text, null, rawBytes, resultPoints, format, System.currentTimeMillis());
   }
 
   public Result(String text,
@@ -45,7 +46,40 @@ public final class Result {
                 ResultPoint[] resultPoints,
                 BarcodeFormat format,
                 long timestamp) {
+    this(text, null, rawBytes, resultPoints, format, timestamp);
+  }
+
+  public Result(byte[] data,
+                byte[] rawBytes,
+                ResultPoint[] resultPoints,
+                BarcodeFormat format) {
+    this(null, data, rawBytes, resultPoints, format, System.currentTimeMillis());
+  }
+
+  public Result(byte[] data,
+                byte[] rawBytes,
+                ResultPoint[] resultPoints,
+                BarcodeFormat format,
+                long timestamp) {
+    this(null, data, rawBytes, resultPoints, format, timestamp);
+  }
+
+  public Result(String text,
+	        byte[] data,
+                byte[] rawBytes,
+                ResultPoint[] resultPoints,
+                BarcodeFormat format) {
+    this(text, data, rawBytes, resultPoints, format, System.currentTimeMillis());
+  }
+
+  public Result(String text,
+	        byte[] data,
+                byte[] rawBytes,
+                ResultPoint[] resultPoints,
+                BarcodeFormat format,
+                long timestamp) {
     this.text = text;
+    this.data = data;
     this.rawBytes = rawBytes;
     this.resultPoints = resultPoints;
     this.format = format;
@@ -54,10 +88,17 @@ public final class Result {
   }
 
   /**
-   * @return raw text encoded by the barcode
+   * @return text encoded by the barcode, if applicable, otherwise {@code null}
    */
   public String getText() {
     return text;
+  }
+
+  /**
+   * @return binary data encoded by the barcode, if applicable, otherwise {@code null}
+   */
+  public byte[] getBinaryData() {
+    return data;
   }
 
   /**

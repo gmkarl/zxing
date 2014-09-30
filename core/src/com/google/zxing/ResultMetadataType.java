@@ -56,6 +56,24 @@ public enum ResultMetadataType {
   ERROR_CORRECTION_LEVEL,
 
   /**
+   * (Structured Append) Symbol index, if applicable. The value is an Integer
+   * between 1 and 16.
+   */
+  STRUCTURED_APPEND_INDEX,
+
+  /**
+   * (Structured Append) Total number of symbols, if applicable. The value is an Integer
+   * between 1 and 16.
+   */
+  STRUCTURED_APPEND_TOTAL,
+
+  /**
+   * (Structured Append) Data parity byte, if applicable. The value is an Integer
+   * in the 8-bit range.
+   */
+  STRUCTURED_APPEND_PARITY,
+
+  /**
    * For some periodicals, indicates the issue number as an {@link Integer}.
    */
   ISSUE_NUMBER,

@@ -30,6 +30,8 @@ import com.google.zxing.multi.MultipleBarcodeReader;
 import com.google.zxing.multi.qrcode.detector.MultiDetector;
 import com.google.zxing.qrcode.QRCodeReader;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +59,7 @@ public final class QRCodeMultiReader extends QRCodeReader implements MultipleBar
       try {
         DecoderResult decoderResult = getDecoder().decode(detectorResult.getBits());
         ResultPoint[] points = detectorResult.getPoints();
-        Result result = new Result(decoderResult.getText(), decoderResult.getRawBytes(), points,
+        Result result = new Result(decoderResult.getText(), decoderResult.getBinaryData(), decoderResult.getRawBytes(), points,
                                    BarcodeFormat.QR_CODE);
         List<byte[]> byteSegments = decoderResult.getByteSegments();
         if (byteSegments != null) {
@@ -66,6 +68,11 @@ public final class QRCodeMultiReader extends QRCodeReader implements MultipleBar
         String ecLevel = decoderResult.getECLevel();
         if (ecLevel != null) {
           result.putMetadata(ResultMetadataType.ERROR_CORRECTION_LEVEL, ecLevel);
+        }
+        if (decoderResult.isPartOfStructuredAppend()) {
+            result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_INDEX, decoderResult.getIndex());
+            result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_TOTAL, decoderResult.getTotal());
+            result.putMetadata(ResultMetadataType.STRUCTURED_APPEND_PARITY, decoderResult.getParity());
         }
         results.add(result);
       } catch (ReaderException re) {
@@ -77,6 +84,65 @@ public final class QRCodeMultiReader extends QRCodeReader implements MultipleBar
     } else {
       return results.toArray(new Result[results.size()]);
     }
+  }
+  
+  public static Result[] reassembleStructuredAppendSymbols(Result[] symbols) {
+      List<Result> results = new ArrayList<Result>();
+      List<Result> starters = new ArrayList<Result>();
+      for (Result s : symbols) {
+          Integer index = (Integer) s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_INDEX);
+          if (index == null) {
+              results.add(s);
+          } else if (index == 1) {
+              starters.add(s);
+          }
+      }
+      for (Result s : starters) {
+          Integer total = (Integer) s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_TOTAL);
+          Integer parity = (Integer) s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_PARITY);
+          List<Result> list = new ArrayList<Result>();
+          list.add(s);
+          for (int i = 2; i <= total; i++) {
+              Result next = findSymbol(i, total, parity, symbols);
+              if (next == null) break;
+              list.add(next);
+          }
+          if (list.size() == total) {
+              StringBuilder text = new StringBuilder();
+              ByteArrayOutputStream data = new ByteArrayOutputStream();
+              ByteArrayOutputStream rawBytes = new ByteArrayOutputStream();
+              try {
+        	  for (Result cur : list) {
+        	      if (cur.getText() != null) {
+        		  text.append(cur.getText());
+        	      }
+        	      if (cur.getBinaryData() != null) {
+        		  data.write(cur.getBinaryData());
+        	      }
+        	      rawBytes.write(cur.getRawBytes());
+        	  }
+              } catch (IOException e) {}
+              String resText = (text.length() > 0) ? text.toString() : null;
+              byte[] resData = (data.size() > 0) ? data.toByteArray() : null;
+              results.add(new Result(resText, resData, rawBytes.toByteArray(), null, BarcodeFormat.QR_CODE));
+          }
+      }
+      if (results.isEmpty()) {
+	      return EMPTY_RESULT_ARRAY;
+	    } else {
+	      return results.toArray(new Result[results.size()]);
+	    }
+  }
+  
+  private static Result findSymbol(Integer index, Integer total, Integer parity, Result[] symbols) {
+      for (Result s : symbols) {
+	  if (index.equals(s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_INDEX)) &&
+              total.equals(s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_TOTAL)) &&
+              parity.equals(s.getResultMetadata().get(ResultMetadataType.STRUCTURED_APPEND_PARITY))) {
+	      return s;
+	  }
+      }
+      return null;
   }
 
 }
