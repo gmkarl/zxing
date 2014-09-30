@@ -106,7 +106,7 @@ public final class Encoder {
     if (mode == Mode.BYTE && !DEFAULT_BYTE_MODE_ENCODING.equals(encoding)) {
 	eci = CharacterSetECI.getCharacterSetECIByName(encoding);
     }
-    if (qrCode.getVersion() == 0) {
+    if (qrCode.getVersion() == -1) {
 	int numInputBits = dataBits.getSize();
 	initQRCode(sa, eci, numInputBits, ecLevel, mode, qrCode);
     }
