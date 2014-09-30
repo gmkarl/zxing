@@ -21,6 +21,7 @@ import com.google.zxing.ResultPoint;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.common.DetectorResult;
 import com.google.zxing.common.GridSampler;
+import com.google.zxing.common.detector.MathUtils;
 import com.google.zxing.common.detector.WhiteRectangleDetector;
 
 import java.io.Serializable;
@@ -159,8 +160,8 @@ public final class Detector {
     // than twice the other, it's certainly rectangular, but to cut a bit more slack we accept it as
     // rectangular if the bigger side is at least 7/4 times the other:
     if (4 * dimensionTop >= 7 * dimensionRight || 4 * dimensionRight >= 7 * dimensionTop) {
-    	// The matrix is rectangular
-    	
+      // The matrix is rectangular
+
       correctedTopRight =
           correctTopRightRectangular(bottomLeft, bottomRight, topLeft, topRight, dimensionTop, dimensionRight);
       if (correctedTopRight == null){
@@ -183,9 +184,9 @@ public final class Detector {
       bits = sampleGrid(image, topLeft, bottomLeft, bottomRight, correctedTopRight, dimensionTop, dimensionRight);
           
     } else {
-    	// The matrix is square
+      // The matrix is square
         
-    	int dimension = Math.min(dimensionRight, dimensionTop);
+      int dimension = Math.min(dimensionRight, dimensionTop);
       // correct top right point to match the white module
       correctedTopRight = correctTopRight(bottomLeft, bottomRight, topLeft, topRight, dimension);
       if (correctedTopRight == null){
@@ -222,20 +223,20 @@ public final class Detector {
                                                  ResultPoint topRight,
                                                  int dimensionTop,
                                                  int dimensionRight) {
-	  
-		float corr = distance(bottomLeft, bottomRight) / (float)dimensionTop;
-		int norm = distance(topLeft, topRight);
-		float cos = (topRight.getX() - topLeft.getX()) / norm;
-		float sin = (topRight.getY() - topLeft.getY()) / norm;
-		
-		ResultPoint c1 = new ResultPoint(topRight.getX()+corr*cos, topRight.getY()+corr*sin);
-	
-		corr = distance(bottomLeft, topLeft) / (float)dimensionRight;
-		norm = distance(bottomRight, topRight);
-		cos = (topRight.getX() - bottomRight.getX()) / norm;
-		sin = (topRight.getY() - bottomRight.getY()) / norm;
-		
-		ResultPoint c2 = new ResultPoint(topRight.getX()+corr*cos, topRight.getY()+corr*sin);
+
+    float corr = distance(bottomLeft, bottomRight) / (float)dimensionTop;
+    int norm = distance(topLeft, topRight);
+    float cos = (topRight.getX() - topLeft.getX()) / norm;
+    float sin = (topRight.getY() - topLeft.getY()) / norm;
+
+    ResultPoint c1 = new ResultPoint(topRight.getX()+corr*cos, topRight.getY()+corr*sin);
+
+    corr = distance(bottomLeft, topLeft) / (float)dimensionRight;
+    norm = distance(bottomRight, topRight);
+    cos = (topRight.getX() - bottomRight.getX()) / norm;
+    sin = (topRight.getY() - bottomRight.getY()) / norm;
+
+    ResultPoint c2 = new ResultPoint(topRight.getX()+corr*cos, topRight.getY()+corr*sin);
 
     if (!isValid(c1)) {
       if (isValid(c2)) {
@@ -248,15 +249,15 @@ public final class Detector {
     }
 
     int l1 = Math.abs(dimensionTop - transitionsBetween(topLeft, c1).getTransitions()) +
-					Math.abs(dimensionRight - transitionsBetween(bottomRight, c1).getTransitions());
-		int l2 = Math.abs(dimensionTop - transitionsBetween(topLeft, c2).getTransitions()) + 
-		Math.abs(dimensionRight - transitionsBetween(bottomRight, c2).getTransitions());
-		
-		if (l1 <= l2){
-			return c1;
-		}
-		
-		return c2;
+          Math.abs(dimensionRight - transitionsBetween(bottomRight, c1).getTransitions());
+    int l2 = Math.abs(dimensionTop - transitionsBetween(topLeft, c2).getTransitions()) +
+    Math.abs(dimensionRight - transitionsBetween(bottomRight, c2).getTransitions());
+
+    if (l1 <= l2){
+      return c1;
+    }
+
+    return c2;
   }
 
   /**
@@ -268,20 +269,20 @@ public final class Detector {
                                       ResultPoint topLeft,
                                       ResultPoint topRight,
                                       int dimension) {
-		
-		float corr = distance(bottomLeft, bottomRight) / (float) dimension;
-		int norm = distance(topLeft, topRight);
-		float cos = (topRight.getX() - topLeft.getX()) / norm;
-		float sin = (topRight.getY() - topLeft.getY()) / norm;
-		
-		ResultPoint c1 = new ResultPoint(topRight.getX() + corr * cos, topRight.getY() + corr * sin);
-	
-		corr = distance(bottomLeft, bottomRight) / (float) dimension;
-		norm = distance(bottomRight, topRight);
-		cos = (topRight.getX() - bottomRight.getX()) / norm;
-		sin = (topRight.getY() - bottomRight.getY()) / norm;
-		
-		ResultPoint c2 = new ResultPoint(topRight.getX() + corr * cos, topRight.getY() + corr * sin);
+
+    float corr = distance(bottomLeft, bottomRight) / (float) dimension;
+    int norm = distance(topLeft, topRight);
+    float cos = (topRight.getX() - topLeft.getX()) / norm;
+    float sin = (topRight.getY() - topLeft.getY()) / norm;
+
+    ResultPoint c1 = new ResultPoint(topRight.getX() + corr * cos, topRight.getY() + corr * sin);
+
+    corr = distance(bottomLeft, topLeft) / (float) dimension;
+    norm = distance(bottomRight, topRight);
+    cos = (topRight.getX() - bottomRight.getX()) / norm;
+    sin = (topRight.getY() - bottomRight.getY()) / norm;
+
+    ResultPoint c2 = new ResultPoint(topRight.getX() + corr * cos, topRight.getY() + corr * sin);
 
     if (!isValid(c1)) {
       if (isValid(c2)) {
@@ -295,29 +296,18 @@ public final class Detector {
 
     int l1 = Math.abs(transitionsBetween(topLeft, c1).getTransitions() -
                       transitionsBetween(bottomRight, c1).getTransitions());
-		int l2 = Math.abs(transitionsBetween(topLeft, c2).getTransitions() -
+    int l2 = Math.abs(transitionsBetween(topLeft, c2).getTransitions() -
                       transitionsBetween(bottomRight, c2).getTransitions());
 
     return l1 <= l2 ? c1 : c2;
   }
 
   private boolean isValid(ResultPoint p) {
-	  return p.getX() >= 0 && p.getX() < image.getWidth() && p.getY() > 0 && p.getY() < image.getHeight();
+    return p.getX() >= 0 && p.getX() < image.getWidth() && p.getY() > 0 && p.getY() < image.getHeight();
   }
 
-  /**
-   * Ends up being a bit faster than Math.round(). This merely rounds its
-   * argument to the nearest int, where x.5 rounds up.
-   */
-  private static int round(float d) {
-    return (int) (d + 0.5f);
-  }
-
-// L2 distance
   private static int distance(ResultPoint a, ResultPoint b) {
-    return round((float) Math.sqrt((a.getX() - b.getX())
-        * (a.getX() - b.getX()) + (a.getY() - b.getY())
-        * (a.getY() - b.getY())));
+    return MathUtils.round(ResultPoint.distance(a, b));
   }
 
   /**
@@ -406,7 +396,7 @@ public final class Detector {
   /**
    * Simply encapsulates two points and a number of transitions between them.
    */
-  private static class ResultPointsAndTransitions {
+  private static final class ResultPointsAndTransitions {
 
     private final ResultPoint from;
     private final ResultPoint to;

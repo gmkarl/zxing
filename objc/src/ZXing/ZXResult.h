@@ -15,13 +15,14 @@
  * limitations under the License.
  */
 
-#include <zxing/Result.h>
+@class ZXResultInternal;
 
 @interface ZXResult : NSObject {
-  zxing::Ref<zxing::Result> native;
+  ZXResultInternal* state_;
 }
 
-- (ZXResult*)initWithNative:(zxing::Result*)native;
-- (NSString*)text;
+@property (readonly) NSString* text;
+
+- (ZXResult*)initWithNative:(void*)native;
 
 @end

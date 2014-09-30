@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- Copyright (C) 2011 ZXing authors
+ Copyright (C) 2012 ZXing authors
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -94,6 +94,7 @@
   <string name="msg_sure">Sei sicuro?</string>
   <string name="msg_unmount_usb">Spiacenti, la scheda SD non è accessibile.</string>
   <string name="preferences_actions_title">Quando viene trovato un codice a barre\u2026</string>
+  <string name="preferences_auto_focus_title">Utilizzare messa a fuoco automatica</string>
   <string name="preferences_bulk_mode_summary">Scansiona e salva diversi codici a barre in sequenza</string>
   <string name="preferences_bulk_mode_title">Modalità scansione di gruppo</string>
   <string name="preferences_copy_to_clipboard_title">Copia negli appunti</string>
@@ -110,8 +111,6 @@
   <string name="preferences_remember_duplicates_summary">Mantieni scansioni multiple del codice a barre nella stessa Cronologia</string>
   <string name="preferences_remember_duplicates_title">Ricorda duplicati</string>
   <string name="preferences_result_title">Impostazioni risultato</string>
-  <string name="preferences_reverse_image_summary">Attiva solo su dispositivi con fotocamera frontale</string>
-  <string name="preferences_reverse_image_title">Immagine fotocamera invertita</string>
   <string name="preferences_scanning_title">Durante la scansione di codici a barre, decodifica\u2026</string>
   <string name="preferences_search_country">Cerca paese</string>
   <string name="preferences_supplemental_summary">Prova a cercare ulteriori informazioni sul contenuto del codice a barre</string>

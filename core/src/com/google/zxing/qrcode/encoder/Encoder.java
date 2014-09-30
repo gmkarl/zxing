@@ -93,10 +93,11 @@ public final class Encoder {
     Boolean force8bit = hints == null ? null : (Boolean) hints.get(EncodeHintType.FORCE_8BIT_MODE);
     Mode mode = (Boolean.TRUE.equals(force8bit)) ? Mode.BYTE : chooseMode(content, encoding);
 
-    // Step 2: Append "bytes" into "dataBits" in appropriate encoding.
     BitArray dataBits = new BitArray();
+
+    // Step 2: Append "bytes" into "dataBits" in appropriate encoding.
     appendBytes(content, mode, dataBits, encoding);
-    
+
     // Step 3: Initialize QR code that can contain "dataBits".
     Integer index = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_INDEX);
     Integer total = hints == null ? null : (Integer) hints.get(EncodeHintType.STRUCTURED_APPEND_TOTAL);
@@ -122,7 +123,6 @@ public final class Encoder {
 	appendECI(eci, headerAndDataBits);
     }
 
-    appendModeInfo(mode, headerAndDataBits);
 
     int numLetters = mode == Mode.BYTE ? dataBits.getSizeInBytes() : content.length();
     appendLengthInfo(numLetters, qrCode.getVersion(), mode, headerAndDataBits);
@@ -643,7 +643,7 @@ public final class Encoder {
     try {
       bytes = content.getBytes(encoding);
     } catch (UnsupportedEncodingException uee) {
-      throw new WriterException(uee.toString());
+      throw new WriterException(uee);
     }
     for (byte b : bytes) {
       bits.appendBits(b, 8);
@@ -655,7 +655,7 @@ public final class Encoder {
     try {
       bytes = content.getBytes("Shift_JIS");
     } catch (UnsupportedEncodingException uee) {
-      throw new WriterException(uee.toString());
+      throw new WriterException(uee);
     }
     int length = bytes.length;
     for (int i = 0; i < length; i += 2) {

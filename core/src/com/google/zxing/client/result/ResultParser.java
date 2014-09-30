@@ -65,6 +65,7 @@ public abstract class ResultParser {
   private static final Pattern ALPHANUM = Pattern.compile("[a-zA-Z0-9]*");
   private static final Pattern AMPERSAND = Pattern.compile("&");
   private static final Pattern EQUALS = Pattern.compile("=");
+  private static final String BYTE_ORDER_MARK = "\ufeff";
 
   /**
    * Attempts to parse the raw {@link Result}'s contents as a particular type
@@ -72,6 +73,14 @@ public abstract class ResultParser {
    * the result of parsing.
    */
   public abstract ParsedResult parse(Result theResult);
+
+  protected static String getMassagedText(Result result) {
+    String text = result.getText();
+    if (text.startsWith(BYTE_ORDER_MARK)) {
+      text = text.substring(1);
+    }
+    return text;
+  }
 
   public static ParsedResult parseResult(Result theResult) {
     for (ResultParser parser : PARSERS) {
@@ -169,18 +178,19 @@ public abstract class ResultParser {
     return result;
   }
 
-  private static void appendKeyValue(CharSequence keyValue,
-                                     Map<String,String> result) {
+  private static void appendKeyValue(CharSequence keyValue, Map<String,String> result) {
     String[] keyValueTokens = EQUALS.split(keyValue, 2);
     if (keyValueTokens.length == 2) {
       String key = keyValueTokens[0];
       String value = keyValueTokens[1];
       try {
         value = URLDecoder.decode(value, "UTF-8");
+        result.put(key, value);
       } catch (UnsupportedEncodingException uee) {
         throw new IllegalStateException(uee); // can't happen
+      } catch (IllegalArgumentException iae) {
+        // continue; invalid data such as an escape like %0t
       }
-      result.put(key, value);
     }
   }
 

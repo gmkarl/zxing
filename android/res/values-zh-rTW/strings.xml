@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
- Copyright (C) 2011 ZXing authors
+ Copyright (C) 2012 ZXing authors
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -94,6 +94,7 @@
   <string name="msg_sure">你確定嗎？</string>
   <string name="msg_unmount_usb">無法讀取 SD 卡。</string>
   <string name="preferences_actions_title">找到條碼時</string>
+  <string name="preferences_auto_focus_title">使用自動對焦</string>
   <string name="preferences_bulk_mode_summary">連續掃描並儲存多個條碼</string>
   <string name="preferences_bulk_mode_title">大量掃描模式</string>
   <string name="preferences_copy_to_clipboard_title">複製到剪貼簿</string>
@@ -110,8 +111,6 @@
   <string name="preferences_remember_duplicates_summary">在紀錄中重複儲存相同的條碼</string>
   <string name="preferences_remember_duplicates_title">記錄重複的條碼</string>
   <string name="preferences_result_title">結果設定</string>
-  <string name="preferences_reverse_image_summary">如果您的設備上只有一個前置攝影機，請開啟此選項</string>
-  <string name="preferences_reverse_image_title">反轉攝影機的圖像</string>
   <string name="preferences_scanning_title">當掃描條碼時</string>
   <string name="preferences_search_country">搜索國家</string>
   <string name="preferences_supplemental_summary">嘗試透過條碼搜尋更多的資訊</string>

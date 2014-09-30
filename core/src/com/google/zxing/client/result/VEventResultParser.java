@@ -30,10 +30,7 @@ public final class VEventResultParser extends ResultParser {
 
   @Override
   public CalendarParsedResult parse(Result result) {
-    String rawText = result.getText();
-    if (rawText == null) {
-      return null;
-    }
+    String rawText = getMassagedText(result);
     int vEventStart = rawText.indexOf("BEGIN:VEVENT");
     if (vEventStart < 0) {
       return null;
@@ -74,7 +71,7 @@ public final class VEventResultParser extends ResultParser {
   private static String matchSingleVCardPrefixedField(CharSequence prefix,
                                                       String rawText,
                                                       boolean trim) {
-    List<String> values = VCardResultParser.matchSingleVCardPrefixedField(prefix, rawText, trim);
+    List<String> values = VCardResultParser.matchSingleVCardPrefixedField(prefix, rawText, trim, false);
     return values == null || values.isEmpty() ? null : values.get(0);
   }
 

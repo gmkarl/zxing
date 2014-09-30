@@ -63,23 +63,25 @@ public final class EncodeActivity extends Activity {
   @Override
   public void onCreate(Bundle icicle) {
     super.onCreate(icicle);
-
     Intent intent = getIntent();
-    if (intent != null) {
+    if (intent == null) {
+      finish();
+    } else {
       String action = intent.getAction();
-      if (action.equals(Intents.Encode.ACTION) || action.equals(Intent.ACTION_SEND)) {
+      if (Intents.Encode.ACTION.equals(action) || Intent.ACTION_SEND.equals(action)) {
         setContentView(R.layout.encode);
-        return;
+      } else {
+        finish();
       }
     }
-    finish();
   }
 
   @Override
   public boolean onCreateOptionsMenu(Menu menu) {
     super.onCreateOptionsMenu(menu);
     menu.add(Menu.NONE, SHARE_MENU, Menu.NONE, R.string.menu_share).setIcon(android.R.drawable.ic_menu_share);
-    int encodeNameResource = qrCodeEncoder.isUseVCard() ? R.string.menu_encode_mecard : R.string.menu_encode_vcard;
+    boolean useVcard = qrCodeEncoder != null && qrCodeEncoder.isUseVCard();
+    int encodeNameResource = useVcard ? R.string.menu_encode_mecard : R.string.menu_encode_vcard;
     menu.add(Menu.NONE, ENCODE_FORMAT_MENU, Menu.NONE, encodeNameResource)
         .setIcon(android.R.drawable.ic_menu_sort_alphabetically);
     return true;

@@ -131,44 +131,46 @@ namespace com.google.zxing.common
 			return result.ToString();
 		}
 
-    /// <summary>
-    /// Converts this ByteMatrix to a black and white bitmap.
-    /// </summary>
-    /// <returns>A black and white bitmap converted from this ByteMatrix.</returns>
-    public Bitmap ToBitmap()
-    {
-      const byte BLACK = 0;
-      const byte WHITE = 255;
-      sbyte[][] array = this.Array;
-      int width = this.Width;
-      int height = this.Height;
-      byte[] pixels = new byte[width * height];
+		/// <summary>
+		/// Converts this ByteMatrix to a black and white bitmap.
+		/// </summary>
+		/// <returns>A black and white bitmap converted from this ByteMatrix.</returns>
+		public Bitmap ToBitmap()
+		{
+			const byte BLACK = 0;
+			const byte WHITE = 255;
+			sbyte[][] array = this.Array;
+			int width = this.Width;
+			int height = this.Height;
+			//Here create the Bitmap to the known height, width and format
+			Bitmap bmp = new Bitmap(width, height, PixelFormat.Format8bppIndexed);
+			//Create a BitmapData and Lock all pixels to be written
+			BitmapData bmpData =
+				bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+										 ImageLockMode.WriteOnly, bmp.PixelFormat);
 
-      for (int y = 0; y < height; y++)
-      {
-        int offset = y * width;
-        for (int x = 0; x < width; x++)
-        {
-           pixels[offset + x] = array[y][x] == 0 ? BLACK : WHITE;
-        }
-      }
+			// If you wanted to support formats other than 8bpp, you should use Bitmap.GetPixelFormatSize(bmp.PixelFormat) to adjust the array size
+			byte[] pixels = new byte[bmpData.Stride * height];
 
-      //Here create the Bitmap to the known height, width and format
-      Bitmap bmp = new Bitmap(width, height, PixelFormat.Format8bppIndexed);
+			int iPixelsCounter = 0;
+			for (int y = 0; y < height; y++)
+			{
+					int offset = y * width;
+					for (int x = 0; x < width; x++)
+					{
+						pixels[iPixelsCounter++] = array[y][x] == BLACK ? BLACK : WHITE;
+					}
+					iPixelsCounter += bmpData.Stride - width;
+			}
 
-      //Create a BitmapData and Lock all pixels to be written
-      BitmapData bmpData =
-        bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
-                     ImageLockMode.WriteOnly, bmp.PixelFormat);
+			//Copy the data from the byte array into BitmapData.Scan0
+			System.Runtime.InteropServices.Marshal.Copy(pixels, 0, bmpData.Scan0, pixels.Length);
 
-      //Copy the data from the byte array into BitmapData.Scan0
-      Marshal.Copy(pixels, 0, bmpData.Scan0, pixels.Length);
+			//Unlock the pixels
+			bmp.UnlockBits(bmpData);
 
-      //Unlock the pixels
-      bmp.UnlockBits(bmpData);
-
-      //Return the bitmap
-      return bmp;
-    }
+			//Return the bitmap
+			return bmp;
+		}
 	}
 }

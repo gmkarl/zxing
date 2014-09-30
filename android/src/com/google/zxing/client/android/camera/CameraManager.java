@@ -17,16 +17,13 @@
 package com.google.zxing.client.android.camera;
 
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.hardware.Camera;
 import android.os.Handler;
-import android.preference.PreferenceManager;
 import android.util.Log;
 import android.view.SurfaceHolder;
 import com.google.zxing.client.android.PlanarYUVLuminanceSource;
-import com.google.zxing.client.android.PreferencesActivity;
 
 import java.io.IOException;
 
@@ -49,11 +46,11 @@ public final class CameraManager {
   private final Context context;
   private final CameraConfigurationManager configManager;
   private Camera camera;
+  private AutoFocusManager autoFocusManager;
   private Rect framingRect;
   private Rect framingRectInPreview;
   private boolean initialized;
   private boolean previewing;
-  private boolean reverseImage;
   private int requestedFramingRectWidth;
   private int requestedFramingRectHeight;
   /**
@@ -61,14 +58,11 @@ public final class CameraManager {
    * clear the handler so it will only receive one message.
    */
   private final PreviewCallback previewCallback;
-  /** Autofocus callbacks arrive here, and are dispatched to the Handler which requested them. */
-  private final AutoFocusCallback autoFocusCallback;
 
   public CameraManager(Context context) {
     this.context = context;
     this.configManager = new CameraConfigurationManager(context);
     previewCallback = new PreviewCallback(configManager);
-    autoFocusCallback = new AutoFocusCallback();
   }
 
   /**
@@ -77,7 +71,7 @@ public final class CameraManager {
    * @param holder The surface object which the camera will draw preview frames into.
    * @throws IOException Indicates the camera driver failed to open.
    */
-  public void openDriver(SurfaceHolder holder) throws IOException {
+  public synchronized void openDriver(SurfaceHolder holder) throws IOException {
     Camera theCamera = camera;
     if (theCamera == null) {
       theCamera = Camera.open();
@@ -98,15 +92,16 @@ public final class CameraManager {
       }
     }
     configManager.setDesiredCameraParameters(theCamera);
+  }
 
-    SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-    reverseImage = prefs.getBoolean(PreferencesActivity.KEY_REVERSE_IMAGE, false);
+  public synchronized boolean isOpen() {
+    return camera != null;
   }
 
   /**
    * Closes the camera driver if still in use.
    */
-  public void closeDriver() {
+  public synchronized void closeDriver() {
     if (camera != null) {
       camera.release();
       camera = null;
@@ -120,23 +115,42 @@ public final class CameraManager {
   /**
    * Asks the camera hardware to begin drawing preview frames to the screen.
    */
-  public void startPreview() {
+  public synchronized void startPreview() {
     Camera theCamera = camera;
     if (theCamera != null && !previewing) {
       theCamera.startPreview();
       previewing = true;
+      autoFocusManager = new AutoFocusManager(context, camera);
     }
   }
 
   /**
    * Tells the camera to stop drawing preview frames.
    */
-  public void stopPreview() {
+  public synchronized void stopPreview() {
+    if (autoFocusManager != null) {
+      autoFocusManager.stop();
+      autoFocusManager = null;
+    }
     if (camera != null && previewing) {
       camera.stopPreview();
       previewCallback.setHandler(null, 0);
-      autoFocusCallback.setHandler(null, 0);
       previewing = false;
+    }
+  }
+
+  /**
+   * Convenience method for {@link com.google.zxing.client.android.CaptureActivity}
+   */
+  public synchronized void setTorch(boolean newSetting) {
+    if (camera != null) {
+      if (autoFocusManager != null) {
+        autoFocusManager.stop();
+      }
+      configManager.setTorch(camera, newSetting);
+      if (autoFocusManager != null) {
+        autoFocusManager.start();
+      }
     }
   }
 
@@ -148,29 +162,11 @@ public final class CameraManager {
    * @param handler The handler to send the message to.
    * @param message The what field of the message to be sent.
    */
-  public void requestPreviewFrame(Handler handler, int message) {
+  public synchronized void requestPreviewFrame(Handler handler, int message) {
     Camera theCamera = camera;
     if (theCamera != null && previewing) {
       previewCallback.setHandler(handler, message);
       theCamera.setOneShotPreviewCallback(previewCallback);
-    }
-  }
-
-  /**
-   * Asks the camera hardware to perform an autofocus.
-   *
-   * @param handler The Handler to notify when the autofocus completes.
-   * @param message The message to deliver.
-   */
-  public void requestAutoFocus(Handler handler, int message) {
-    if (camera != null && previewing) {
-      autoFocusCallback.setHandler(handler, message);
-      try {
-        camera.autoFocus(autoFocusCallback);
-      } catch (RuntimeException re) {
-        // Have heard RuntimeException reported in Android 4.0.x+; continue?
-        Log.w(TAG, "Unexpected exception while focusing", re);
-      }
     }
   }
 
@@ -181,12 +177,16 @@ public final class CameraManager {
    *
    * @return The rectangle to draw on screen in window coordinates.
    */
-  public Rect getFramingRect() {
+  public synchronized Rect getFramingRect() {
     if (framingRect == null) {
       if (camera == null) {
         return null;
       }
       Point screenResolution = configManager.getScreenResolution();
+      if (screenResolution == null) {
+        // Called early, before init even finished
+        return null;
+      }
       int width = screenResolution.x * 3 / 4;
       if (width < MIN_FRAME_WIDTH) {
         width = MIN_FRAME_WIDTH;
@@ -211,7 +211,7 @@ public final class CameraManager {
    * Like {@link #getFramingRect} but coordinates are in terms of the preview frame,
    * not UI / screen.
    */
-  public Rect getFramingRectInPreview() {
+  public synchronized Rect getFramingRectInPreview() {
     if (framingRectInPreview == null) {
       Rect framingRect = getFramingRect();
       if (framingRect == null) {
@@ -220,6 +220,10 @@ public final class CameraManager {
       Rect rect = new Rect(framingRect);
       Point cameraResolution = configManager.getCameraResolution();
       Point screenResolution = configManager.getScreenResolution();
+      if (cameraResolution == null || screenResolution == null) {
+        // Called early, before init even finished
+        return null;
+      }
       rect.left = rect.left * cameraResolution.x / screenResolution.x;
       rect.right = rect.right * cameraResolution.x / screenResolution.x;
       rect.top = rect.top * cameraResolution.y / screenResolution.y;
@@ -236,7 +240,7 @@ public final class CameraManager {
    * @param width The width in pixels to scan.
    * @param height The height in pixels to scan.
    */
-  public void setManualFramingRect(int width, int height) {
+  public synchronized void setManualFramingRect(int width, int height) {
     if (initialized) {
       Point screenResolution = configManager.getScreenResolution();
       if (width > screenResolution.x) {
@@ -272,7 +276,7 @@ public final class CameraManager {
     }
     // Go ahead and assume it's YUV rather than die.
     return new PlanarYUVLuminanceSource(data, width, height, rect.left, rect.top,
-                                        rect.width(), rect.height(), reverseImage);
+                                        rect.width(), rect.height(), false);
   }
 
 }

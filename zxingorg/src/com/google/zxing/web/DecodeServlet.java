@@ -37,25 +37,6 @@ import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileUploadException;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
-import org.apache.http.Header;
-import org.apache.http.HttpMessage;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpVersion;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpUriRequest;
-import org.apache.http.conn.scheme.PlainSocketFactory;
-import org.apache.http.conn.scheme.Scheme;
-import org.apache.http.conn.scheme.SchemeRegistry;
-import org.apache.http.conn.ssl.SSLSocketFactory;
-import org.apache.http.conn.ClientConnectionManager;
-import org.apache.http.impl.client.DefaultHttpClient;
-import org.apache.http.impl.conn.SingleClientConnManager;
-import org.apache.http.params.BasicHttpParams;
-import org.apache.http.params.HttpParams;
-import org.apache.http.params.HttpProtocolParams;
-import org.apache.http.util.EntityUtils;
 
 import java.awt.color.CMMException;
 import java.awt.image.BufferedImage;
@@ -63,8 +44,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -72,6 +56,8 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -91,15 +77,16 @@ import javax.servlet.http.HttpServletResponse;
  */
 public final class DecodeServlet extends HttpServlet {
 
+  private static final Logger log = Logger.getLogger(DecodeServlet.class.getName());
+
   // No real reason to let people upload more than a 2MB image
   private static final long MAX_IMAGE_SIZE = 2000000L;
   // No real reason to deal with more than maybe 2 megapixels
   private static final int MAX_PIXELS = 1 << 21;
-
-  private static final Logger log = Logger.getLogger(DecodeServlet.class.getName());
-
-  static final Map<DecodeHintType,Object> HINTS;
-  static final Map<DecodeHintType,Object> HINTS_PURE;
+  private static final byte[] REMAINDER_BUFFER = new byte[8192];
+  private static final long GC_HACK_INTERVAL_MS = 60 * 1000;
+  private static final Map<DecodeHintType,Object> HINTS;
+  private static final Map<DecodeHintType,Object> HINTS_PURE;
 
   static {
     HINTS = new EnumMap<DecodeHintType,Object>(DecodeHintType.class);
@@ -109,33 +96,30 @@ public final class DecodeServlet extends HttpServlet {
     HINTS_PURE.put(DecodeHintType.PURE_BARCODE, Boolean.TRUE);
   }
 
-  private HttpParams params;
-  private SchemeRegistry registry;
   private DiskFileItemFactory diskFileItemFactory;
+  private Timer gcHackTimer;
 
   @Override
   public void init(ServletConfig servletConfig) {
-
     Logger logger = Logger.getLogger("com.google.zxing");
     logger.addHandler(new ServletContextLogHandler(servletConfig.getServletContext()));
-
-    params = new BasicHttpParams();
-    HttpProtocolParams.setVersion(params, HttpVersion.HTTP_1_1);
-
-    registry = new SchemeRegistry();
-    registry.register(new Scheme("http", 80, PlainSocketFactory.getSocketFactory()));
-    registry.register(new Scheme("https", 443, SSLSocketFactory.getSocketFactory()));
-
+    gcHackTimer = new Timer();
+    gcHackTimer.schedule(new TimerTask() {
+      @Override
+      public void run() {
+        System.gc(); // Hack: GC may close these weird stuck CLOSE_WAIT sockets?
+      }
+    }, GC_HACK_INTERVAL_MS, GC_HACK_INTERVAL_MS);
     diskFileItemFactory = new DiskFileItemFactory();
-
     log.info("DecodeServlet configured");
   }
 
   @Override
-  protected void doGet(HttpServletRequest request, HttpServletResponse response)
-      throws ServletException, IOException {
+  protected void doGet(HttpServletRequest request,
+                       HttpServletResponse response) throws ServletException, IOException {
+
     String imageURIString = request.getParameter("u");
-    if (imageURIString == null || imageURIString.length() == 0) {
+    if (imageURIString == null || imageURIString.isEmpty()) {
       log.fine("URI was empty");
       response.sendRedirect("badurl.jspx");
       return;
@@ -147,10 +131,16 @@ public final class DecodeServlet extends HttpServlet {
       imageURIString = "http://" + imageURIString;
     }
 
-    URI imageURI;
+    URL imageURL;
     try {
-      imageURI = new URI(imageURIString);
+      imageURL = new URI(imageURIString).toURL();
     } catch (URISyntaxException urise) {
+      if (log.isLoggable(Level.FINE)) {
+        log.fine("URI was not valid: " + imageURIString);
+      }
+      response.sendRedirect("badurl.jspx");
+      return;
+    } catch (MalformedURLException mue) {
       if (log.isLoggable(Level.FINE)) {
         log.fine("URI was not valid: " + imageURIString);
       }
@@ -158,25 +148,27 @@ public final class DecodeServlet extends HttpServlet {
       return;
     }
 
-    ClientConnectionManager connectionManager = new SingleClientConnManager(registry);
-    HttpClient client = new DefaultHttpClient(connectionManager, params);
+    HttpURLConnection connection;
+    try {
+      connection = (HttpURLConnection) imageURL.openConnection();
+    } catch (IllegalArgumentException iae) {
+      if (log.isLoggable(Level.FINE)) {
+        log.fine("URI could not be opened: " + imageURL);
+      }
+      response.sendRedirect("badurl.jspx");
+      return;
+    }
 
-    HttpUriRequest getRequest = new HttpGet(imageURI);
-    getRequest.addHeader("Connection", "close"); // Avoids CLOSE_WAIT socket issue?
+    connection.setAllowUserInteraction(false);
+    connection.setReadTimeout(5000);
+    connection.setConnectTimeout(5000);
+    connection.setRequestProperty("User-Agent", "zxing.org");
+    connection.setRequestProperty("Connection", "close");
 
     try {
 
-      HttpResponse getResponse;
       try {
-        getResponse = client.execute(getRequest);
-      } catch (IllegalArgumentException iae) {
-        // Thrown if hostname is bad or null
-        if (log.isLoggable(Level.FINE)) {
-          log.fine(iae.toString());
-        }
-        getRequest.abort();
-        response.sendRedirect("badurl.jspx");
-        return;
+        connection.connect();
       } catch (IOException ioe) {
         // Encompasses lots of stuff, including
         //  java.net.SocketException, java.net.UnknownHostException,
@@ -186,43 +178,65 @@ public final class DecodeServlet extends HttpServlet {
         if (log.isLoggable(Level.FINE)) {
           log.fine(ioe.toString());
         }
-        getRequest.abort();
         response.sendRedirect("badurl.jspx");
         return;
       }
 
-      if (getResponse.getStatusLine().getStatusCode() != HttpServletResponse.SC_OK) {
+      InputStream is = null;
+      try {
+
+        is = connection.getInputStream();
+
+        if (connection.getResponseCode() != HttpServletResponse.SC_OK) {
+          if (log.isLoggable(Level.FINE)) {
+            log.fine("Unsuccessful return code: " + connection.getResponseCode());
+          }
+          response.sendRedirect("badurl.jspx");
+          return;
+        }
+        if (connection.getHeaderFieldInt("Content-Length", 0) > MAX_IMAGE_SIZE) {
+          log.fine("Too large");
+          response.sendRedirect("badimage.jspx");
+          return;
+        }
+
+        log.info("Decoding " + imageURL);
+        processStream(is, request, response);
+
+      } catch (IOException ioe) {
         if (log.isLoggable(Level.FINE)) {
-          log.fine("Unsuccessful return code: " + getResponse.getStatusLine().getStatusCode());
+          log.fine(ioe.toString());
         }
         response.sendRedirect("badurl.jspx");
-        return;
-      }
-      if (!isSizeOK(getResponse)) {
-        log.fine("Too large");
-        response.sendRedirect("badimage.jspx");
-        return;
-      }
-
-      log.info("Decoding " + imageURI);
-      HttpEntity entity = getResponse.getEntity();
-      InputStream is = entity.getContent();
-      try {
-        processStream(is, request, response);
       } finally {
-        EntityUtils.consume(entity);
-        is.close();
+        if (is != null) {
+          consumeRemainder(is);
+          is.close();
+        }
       }
 
     } finally {
-      connectionManager.shutdown();
+      connection.disconnect();
     }
 
   }
 
+  private static void consumeRemainder(InputStream is) {
+    try {
+      int available;
+      while ((available = is.available()) > 0) {
+        is.read(REMAINDER_BUFFER, 0, available); // don't care about value, or collision
+      }
+    } catch (IOException ioe) {
+      // continue
+    } catch (IndexOutOfBoundsException ioobe) {
+      // sun.net.www.http.ChunkedInputStream.read is throwing this, continue
+    }
+  }
+
   @Override
   protected void doPost(HttpServletRequest request, HttpServletResponse response)
-          throws ServletException, IOException {
+      throws ServletException, IOException {
 
     if (!ServletFileUpload.isMultipartContent(request)) {
       log.fine("File upload was not multipart");
@@ -261,8 +275,9 @@ public final class DecodeServlet extends HttpServlet {
 
   }
 
-  private static void processStream(InputStream is, ServletRequest request,
-      HttpServletResponse response) throws ServletException, IOException {
+  private static void processStream(InputStream is,
+                                    ServletRequest request,
+                                    HttpServletResponse response) throws ServletException, IOException {
 
     BufferedImage image;
     try {
@@ -395,20 +410,10 @@ public final class DecodeServlet extends HttpServlet {
     }
   }
 
-  private static boolean isSizeOK(HttpMessage getResponse) {
-    Header lengthHeader = getResponse.getLastHeader("Content-Length");
-    if (lengthHeader != null) {
-      long length = Long.parseLong(lengthHeader.getValue());
-      if (length > MAX_IMAGE_SIZE) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   @Override
   public void destroy() {
     log.config("DecodeServlet shutting down...");
+    gcHackTimer.cancel();
   }
 
 }

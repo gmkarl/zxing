@@ -27,7 +27,7 @@ public class DefaultGridSampler extends GridSampler
 
  	
 
-  public function sampleGrid2(image:BitMatrix,
+ override public function sampleGrid2(image:BitMatrix,
                               dimensionX:int,
                               dimensionY:int,
                               p1ToX:Number,
@@ -67,13 +67,13 @@ public class DefaultGridSampler extends GridSampler
       // sufficient to check the endpoints
       checkAndNudgePoints(image, points);
       try {
-        for (var x:int = 0; x < max; x += 2) {
+        for (x = 0; x < max; x += 2) {
           if (image._get(int(points[x]), int( points[x + 1]))) {
             // Black(-ish) pixel
             bits._set(x >> 1, y);
           }
         }
-      } catch (aioobe:ArrayIndexOutOfBoundsException) {
+      } catch (aioobe:Error) {
         // This feels wrong, but, sometimes if the finder patterns are misidentified, the resulting
         // transform gets "twisted" such that it maps a straight line of points to a set of points
         // whose endpoints are in bounds, but others are not. There is probably some mathematical

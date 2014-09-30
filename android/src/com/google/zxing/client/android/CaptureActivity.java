@@ -100,6 +100,7 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
   private static final String[] ZXING_URLS = { "http://zxing.appspot.com/scan", "zxing://scan/" };
   private static final String RETURN_CODE_PLACEHOLDER = "{CODE}";
   private static final String RETURN_URL_PARAM = "ret";
+  private static final String RAW_PARAM = "raw";
 
   public static final int HISTORY_REQUEST_CODE = 0x0000bacc;
 
@@ -121,6 +122,7 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
   private IntentSource source;
   private String sourceUrl;
   private String returnUrlTemplate;
+  private boolean returnRaw;
   private Collection<BarcodeFormat> decodeFormats;
   private String characterSet;
   private String versionName;
@@ -130,13 +132,13 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
 
   private final DialogInterface.OnClickListener aboutListener =
       new DialogInterface.OnClickListener() {
-    @Override
-    public void onClick(DialogInterface dialogInterface, int i) {
-      Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.zxing_url)));
-      intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
-      startActivity(intent);
-    }
-  };
+        @Override
+        public void onClick(DialogInterface dialogInterface, int i) {
+          Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(getString(R.string.zxing_url)));
+          intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+          startActivity(intent);
+        }
+      };
 
   ViewfinderView getViewfinderView() {
     return viewfinderView;
@@ -257,6 +259,7 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
         sourceUrl = dataString;
         Uri inputUri = Uri.parse(sourceUrl);
         returnUrlTemplate = inputUri.getQueryParameter(RETURN_URL_PARAM);
+        returnRaw = inputUri.getQueryParameter(RAW_PARAM) != null;
         decodeFormats = DecodeFormatManager.parseDecodeFormats(inputUri);
 
       }
@@ -302,18 +305,29 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
 
   @Override
   public boolean onKeyDown(int keyCode, KeyEvent event) {
-    if (keyCode == KeyEvent.KEYCODE_BACK) {
-      if (source == IntentSource.NATIVE_APP_INTENT) {
-        setResult(RESULT_CANCELED);
-        finish();
+    switch (keyCode) {
+      case KeyEvent.KEYCODE_BACK:
+        if (source == IntentSource.NATIVE_APP_INTENT) {
+          setResult(RESULT_CANCELED);
+          finish();
+          return true;
+        }
+        if ((source == IntentSource.NONE || source == IntentSource.ZXING_LINK) && lastResult != null) {
+          restartPreviewAfterDelay(0L);
+          return true;
+        }
+        break;
+      case KeyEvent.KEYCODE_FOCUS:
+      case KeyEvent.KEYCODE_CAMERA:
+        // Handle these events so they don't launch the Camera app
         return true;
-      } else if ((source == IntentSource.NONE || source == IntentSource.ZXING_LINK) && lastResult != null) {
-        restartPreviewAfterDelay(0L);
+      // Use volume up/down to turn on light
+      case KeyEvent.KEYCODE_VOLUME_DOWN:
+        cameraManager.setTorch(false);
         return true;
-      }
-    } else if (keyCode == KeyEvent.KEYCODE_FOCUS || keyCode == KeyEvent.KEYCODE_CAMERA) {
-      // Handle these events so they don't launch the Camera app
-      return true;
+      case KeyEvent.KEYCODE_VOLUME_UP:
+        cameraManager.setTorch(true);
+        return true;
     }
     return super.onKeyDown(keyCode, event);
   }
@@ -352,8 +366,6 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
         startActivity(intent);
         break;
       case HISTORY_ID:
-        intent = new Intent(Intent.ACTION_VIEW);
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
         intent.setClassName(this, HistoryActivity.class.getName());
         startActivityForResult(intent, HISTORY_REQUEST_CODE);
         break;
@@ -441,36 +453,35 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
     lastResult = rawResult;
     ResultHandler resultHandler = ResultHandlerFactory.makeResultHandler(this, rawResult);
     historyManager.addHistoryItem(rawResult, resultHandler);
+    beepManager.playBeepSoundAndVibrate();
 
-    if (barcode == null) {
-      // This is from history -- no saved barcode
-      handleDecodeInternally(rawResult, resultHandler, null);
-    } else {
-      beepManager.playBeepSoundAndVibrate();
+    if (barcode != null) {
       drawResultPoints(barcode, rawResult);
-      switch (source) {
-        case NATIVE_APP_INTENT:
-        case PRODUCT_SEARCH_LINK:
+    }
+    switch (source) {
+      case NATIVE_APP_INTENT:
+      case PRODUCT_SEARCH_LINK:
+        handleDecodeExternally(rawResult, resultHandler, barcode);
+        break;
+      case ZXING_LINK:
+        if (returnUrlTemplate == null){
+          handleDecodeInternally(rawResult, resultHandler, barcode);
+        } else {
           handleDecodeExternally(rawResult, resultHandler, barcode);
-          break;
-        case ZXING_LINK:
-          if (returnUrlTemplate == null){
-            handleDecodeInternally(rawResult, resultHandler, barcode);
-          } else {
-            handleDecodeExternally(rawResult, resultHandler, barcode);
-          }
-          break;
-        case NONE:
-          SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-          if (prefs.getBoolean(PreferencesActivity.KEY_BULK_MODE, false)) {
-            Toast.makeText(this, R.string.msg_bulk_mode_scanned, Toast.LENGTH_SHORT).show();
-            // Wait a moment or else it will scan the same barcode continuously about 3 times
-            restartPreviewAfterDelay(BULK_MODE_SCAN_DELAY_MS);
-          } else {
-            handleDecodeInternally(rawResult, resultHandler, barcode);
-          }
-          break;
-      }
+        }
+        break;
+      case NONE:
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        if (prefs.getBoolean(PreferencesActivity.KEY_BULK_MODE, false)) {
+          String message = getResources().getString(R.string.msg_bulk_mode_scanned)
+              + " (" + rawResult.getText() + ')';
+          Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+          // Wait a moment or else it will scan the same barcode continuously about 3 times
+          restartPreviewAfterDelay(BULK_MODE_SCAN_DELAY_MS);
+        } else {
+          handleDecodeInternally(rawResult, resultHandler, barcode);
+        }
+        break;
     }
   }
 
@@ -601,7 +612,10 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
 
   // Briefly show the contents of the barcode, then handle the result outside Barcode Scanner.
   private void handleDecodeExternally(Result rawResult, ResultHandler resultHandler, Bitmap barcode) {
-    viewfinderView.drawResultBitmap(barcode);
+
+    if (barcode != null) {
+      viewfinderView.drawResultBitmap(barcode);
+    }
 
     // Since this message will only be shown for a second, just tell the user what kind of
     // barcode was found (e.g. contact info) rather than the full contents, which they won't
@@ -627,6 +641,10 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
       }
       Map<ResultMetadataType,?> metadata = rawResult.getResultMetadata();
       if (metadata != null) {
+        if (metadata.containsKey(ResultMetadataType.UPC_EAN_EXTENSION)) {
+          intent.putExtra(Intents.Scan.RESULT_UPC_EAN_EXTENSION,
+                          metadata.get(ResultMetadataType.UPC_EAN_EXTENSION).toString());
+        }
         Integer orientation = (Integer) metadata.get(ResultMetadataType.ORIENTATION);
         if (orientation != null) {
           intent.putExtra(Intents.Scan.RESULT_ORIENTATION, orientation.intValue());
@@ -659,9 +677,9 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
       // Replace each occurrence of RETURN_CODE_PLACEHOLDER in the returnUrlTemplate
       // with the scanned code. This allows both queries and REST-style URLs to work.
       if (returnUrlTemplate != null) {
-        String codeReplacement = String.valueOf(resultHandler.getDisplayContents());
+        CharSequence codeReplacement = returnRaw ? rawResult.getText() : resultHandler.getDisplayContents();
         try {
-          codeReplacement = URLEncoder.encode(codeReplacement, "UTF-8");
+          codeReplacement = URLEncoder.encode(codeReplacement.toString(), "UTF-8");
         } catch (UnsupportedEncodingException e) {
           // can't happen; UTF-8 is always supported. Continue, I guess, without encoding
         }
@@ -714,6 +732,13 @@ public final class CaptureActivity extends Activity implements SurfaceHolder.Cal
   }
 
   private void initCamera(SurfaceHolder surfaceHolder) {
+    if (surfaceHolder == null) {
+      throw new IllegalStateException("No SurfaceHolder provided");
+    }
+    if (cameraManager.isOpen()) {
+      Log.w(TAG, "initCamera() while already open -- late SurfaceView callback?");
+      return;
+    }
     try {
       cameraManager.openDriver(surfaceHolder);
       // Creating the handler starts the preview, which can also throw a RuntimeException.
