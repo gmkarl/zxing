@@ -15,7 +15,7 @@
  limitations under the License.
  -->
 <resources>
-  <string name="app_name">Barcode Scanner</string>
+  <string name="app_name">Compatible Scanner</string>
   <string name="app_picker_name">Alkalmazások</string>
   <string name="bookmark_picker_name">Könyvjelzők</string>
   <string name="button_add_calendar">Hozzáadás a naptárhoz</string>
@@ -53,7 +53,7 @@
   <string name="contents_text">Egyszerű szöveg</string>
   <string name="history_clear_one_history_text">Törlése</string>
   <string name="history_clear_text">Előzmények törlése</string>
-  <string name="history_email_title">Barcode Scanner előzmények</string>
+  <string name="history_email_title">Compatible Scanner előzmények</string>
   <string name="history_empty">Üres</string>
   <string name="history_empty_detail">Nem vonalkód szkennelés lett felvéve még</string>
   <string name="history_send">Előzmények küldése</string>
@@ -129,7 +129,7 @@
   <string name="result_wifi">WLAN konfiguráció találat</string>
   <string name="sbc_name">Google Könyvek keresés</string>
   <string name="share_name">Megosztás vonalkóddal</string>
-  <string name="title_about">Barcode Scanner v</string>
+  <string name="title_about">Compatible Scanner v</string>
   <string name="wifi_changing_network">Kérése kapcsolat hálózati\u2026</string>
   <string name="wifi_ssid_label">Hálózat neve</string>
   <string name="wifi_type_label">Típus</string>

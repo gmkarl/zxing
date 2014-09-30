@@ -15,7 +15,7 @@
  limitations under the License.
  -->
 <resources>
-  <string name="app_name">Barcode Scanner</string>
+  <string name="app_name">Compatible Scanner</string>
   <string name="app_picker_name">Aplikace</string>
   <string name="bookmark_picker_name">Záložky</string>
   <string name="button_add_calendar">Přidat do kalendáře</string>
@@ -53,7 +53,7 @@
   <string name="contents_text">Ostatní</string>
   <string name="history_clear_one_history_text">Vyčistit</string>
   <string name="history_clear_text">Vyčistit historii</string>
-  <string name="history_email_title">Barcode Scanner historie</string>
+  <string name="history_email_title">Compatible Scanner historie</string>
   <string name="history_empty">Prázdný</string>
   <string name="history_empty_detail">Žádný čárový kód vyšetření byly zaznamenány ještě</string>
   <string name="history_send">Poslat historii</string>
@@ -129,7 +129,7 @@
   <string name="result_wifi">Nalezeno bezdrátová konfigurace</string>
   <string name="sbc_name">Google Knihy hledání</string>
   <string name="share_name">Sdílet pomocí čárového kódu</string>
-  <string name="title_about">Barcode Scanner v</string>
+  <string name="title_about">Compatible Scanner v</string>
   <string name="wifi_changing_network">Požadující připojení k síti\u2026</string>
   <string name="wifi_ssid_label">Jméno sítě</string>
   <string name="wifi_type_label">Typ</string>

@@ -15,7 +15,7 @@
  limitations under the License.
  -->
 <resources>
-  <string name="app_name">Barcode Scanner</string>
+  <string name="app_name">Compatible Scanner</string>
   <string name="app_picker_name">Aplikacije</string>
   <string name="bookmark_picker_name">Zaznamki</string>
   <string name="button_add_calendar">Dodaj v koledar</string>
@@ -53,7 +53,7 @@
   <string name="contents_text">Tekst</string>
   <string name="history_clear_one_history_text">Pobriši</string>
   <string name="history_clear_text">Pobriši zgodovino</string>
-  <string name="history_email_title">Barcode Scanner zgodovina</string>
+  <string name="history_email_title">Compatible Scanner zgodovina</string>
   <string name="history_empty">Prazne</string>
   <string name="history_empty_detail">Št črtne kode scans so bile zabeležene</string>
   <string name="history_send">Pošlji zgodovino</string>
@@ -129,7 +129,7 @@
   <string name="result_wifi">Najdene WLAN nastavitve</string>
   <string name="sbc_name">Iskanje z Google Book Search</string>
   <string name="share_name">Deli preko črtne kode</string>
-  <string name="title_about">Barcode Scanner v</string>
+  <string name="title_about">Compatible Scanner v</string>
   <string name="wifi_changing_network">Zahteva priključitev na omrežje\u2026</string>
   <string name="wifi_ssid_label">Ime omrežja</string>
   <string name="wifi_type_label">Tip</string>

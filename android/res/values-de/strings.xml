@@ -15,7 +15,7 @@
  limitations under the License.
  -->
 <resources>
-  <string name="app_name">Barcode Scanner</string>
+  <string name="app_name">Compatible Scanner</string>
   <string name="app_picker_name">Anwendungen</string>
   <string name="bookmark_picker_name">Lesezeichen</string>
   <string name="button_add_calendar">Termin hinzufügen</string>
@@ -53,7 +53,7 @@
   <string name="contents_text">Text</string>
   <string name="history_clear_one_history_text">Löschen</string>
   <string name="history_clear_text">Historie löschen</string>
-  <string name="history_email_title">Barcode Scanner Historie</string>
+  <string name="history_email_title">Compatible Scanner Historie</string>
   <string name="history_empty">Leer</string>
   <string name="history_empty_detail">Kein Barcode-Scans wurden aufgezeichnet</string>
   <string name="history_send">Historie senden</string>
@@ -129,7 +129,7 @@
   <string name="result_wifi">WLAN-Konfiguration gefunden</string>
   <string name="sbc_name">Google Book Search</string>
   <string name="share_name">Weitergabe mittels Barcode</string>
-  <string name="title_about">Barcode Scanner v</string>
+  <string name="title_about">Compatible Scanner v</string>
   <string name="wifi_changing_network">Anfordern Verbindung zum Netzwerk\u2026</string>
   <string name="wifi_ssid_label">Netzwerk-Name</string>
   <string name="wifi_type_label">Typ</string>
